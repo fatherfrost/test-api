@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { ItemModule } from './item/item.module';
 import { BullModule } from '@nestjs/bullmq';
+import { JobController } from './item/jobs/jobs.controller';
+import { QueueProcessor } from './queue/queue.processor';
 
 @Module({
   imports: [
@@ -13,8 +13,11 @@ import { BullModule } from '@nestjs/bullmq';
         port: 6379,
       },
     }),
+    BullModule.registerQueue({
+      name: 'updateQueue',
+    }),
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [JobController],
+  providers: [QueueProcessor],
 })
 export class AppModule {}
