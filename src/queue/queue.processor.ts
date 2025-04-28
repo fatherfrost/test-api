@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { CreateItemDto } from '../item/dto/create-item.dto';
 import { UpdateItemDto } from '../item/dto/update-item.dto';
 import { DeleteItemDto } from '../item/dto/delete-item.dto';
+import { ItemService } from '../item/item.service';
 
 interface JobData {
   records: CreateItemDto[] | UpdateItemDto[] | DeleteItemDto[];
@@ -12,10 +13,14 @@ interface JobData {
 @Injectable()
 @Processor('updateQueue')
 export class QueueProcessor extends WorkerHost {
-  private readonly BATCH_SIZE = 100;
-  private readonly CONCURRENT_BATCHES = 3;
-  private readonly BATCH_INTERVAL = 1000;
-  private readonly CONCURRENT_OPERATIONS = 10;
+  constructor(private readonly itemService: ItemService) {
+    super();
+  }
+
+  private readonly BATCH_SIZE = 2;
+  private readonly CONCURRENT_BATCHES = 1;
+  private readonly BATCH_INTERVAL = 20000;
+  private readonly CONCURRENT_OPERATIONS = 2;
 
   async process(job: Job<JobData>): Promise<void> {
     const {
@@ -59,8 +64,7 @@ export class QueueProcessor extends WorkerHost {
     let completed = 0;
     await this.processBatchesWithRateLimit(batches, async (batch) => {
       await this.processOperationsWithConcurrency(batch, async (record) => {
-        console.log('Creating record:', record);
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await this.itemService.create(record);
         completed++;
         await updateProgress(completed);
       });
@@ -75,8 +79,7 @@ export class QueueProcessor extends WorkerHost {
     let completed = 0;
     await this.processBatchesWithRateLimit(batches, async (batch) => {
       await this.processOperationsWithConcurrency(batch, async (record) => {
-        console.log('Updating record:', record);
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await this.itemService.update(record.id, record);
         completed++;
         await updateProgress(completed);
       });
@@ -91,8 +94,7 @@ export class QueueProcessor extends WorkerHost {
     let completed = 0;
     await this.processBatchesWithRateLimit(batches, async (batch) => {
       await this.processOperationsWithConcurrency(batch, async (record) => {
-        console.log('Deleting record:', record);
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await this.itemService.remove(record.id);
         completed++;
         await updateProgress(completed);
       });

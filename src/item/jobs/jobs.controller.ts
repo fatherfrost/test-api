@@ -11,7 +11,7 @@ interface JobStatusResponse {
 }
 
 @Controller('jobs')
-export class JobController {
+export class JobsController {
   constructor(@InjectQueue('updateQueue') private updateQueue: Queue) {}
 
   @Get(':id')
@@ -25,9 +25,7 @@ export class JobController {
     return this.buildJobResponse(job);
   }
 
-  private async buildJobResponse(
-    job: Job,
-  ): Promise<JobStatusResponse> {
+  private async buildJobResponse(job: Job): Promise<JobStatusResponse> {
     const status = await job.getState();
 
     if (!status || status === 'unknown') {

@@ -13,7 +13,7 @@ import { UpdateItemDto } from './dto/update-item.dto';
 import { QueueService } from '../queue/queue.service';
 import { DeleteItemDto } from './dto/delete-item.dto';
 
-@Controller('item')
+@Controller('items')
 export class ItemController {
   constructor(
     private readonly queueService: QueueService,
@@ -31,17 +31,17 @@ export class ItemController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.itemService.findOne(+id);
+  findOne(@Param('id') id: number) {
+    return this.itemService.findOne(id);
   }
 
-  @Patch('update')
+  @Patch()
   async updateBulk(@Body() records: UpdateItemDto[]) {
     const jobId = await this.queueService.addBulkUpdateJob(records);
     return { message: 'Update started', jobId };
   }
 
-  @Delete('delete')
+  @Delete()
   async delete(@Body() records: DeleteItemDto[]) {
     const jobId = await this.queueService.addBulkDeleteJob(records);
     return { message: 'Delete started', jobId };

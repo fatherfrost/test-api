@@ -12,16 +12,16 @@ export class QueueService {
   ) {}
   async addBulkCreateJob(records: CreateItemDto[]) {
     const data = await this.updateQueue.add('bulkCreateJob', { records });
-    return data.name;
+    return data.id;
   }
 
   async addBulkUpdateJob(records: UpdateItemDto[]) {
     const data = await this.updateQueue.add('bulkUpdateJob', { records });
-    return data.name;
+    return data.id;
   }
 
   async addBulkDeleteJob(records: DeleteItemDto[]) {
     const data = await this.updateQueue.add('bulkDeleteJob', { records });
-    return data.name;
+    return data.id;
   }
 }
