@@ -1,3 +1,3 @@
 export class DeleteItemDto {
-  id: string;
+  id: number;
 }
