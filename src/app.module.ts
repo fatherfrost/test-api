@@ -3,38 +3,33 @@ import { ItemModule } from './item/item.module';
 import { SharedModule } from './shared/shared.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { QueueModule } from './queue/queue.module';
-import { Item } from './item/entities/item.entity';
 import { BullModule } from '@nestjs/bullmq';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { JobsController } from './item/jobs/jobs.controller';
+import * as process from 'node:process';
 
 @Module({
   imports: [
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          host: configService.get('REDIS_HOST', 'localhost'),
-          port: configService.get('REDIS_PORT', 6379),
-          username: configService.get('REDIS_USERNAME'),
-          password: configService.get('REDIS_PASSWORD'),
-        },
-      }),
-      inject: [ConfigService],
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      synchronize: true,
+      retryAttempts: 10,
+      retryDelay: 20000,
+    }),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST,
+        port: process.env.REDIS_PORT
+          ? parseInt(process.env.REDIS_PORT, 10)
+          : 6379,
+      },
     }),
     BullModule.registerQueue({
       name: 'updateQueue',
     }),
-    ConfigModule.forRoot(),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'your-db-password',
-      database: 'your-db-name',
-      entities: [Item],
-      synchronize: true,
+    ConfigModule.forRoot({
+      isGlobal: true,
     }),
     SharedModule,
     ItemModule,

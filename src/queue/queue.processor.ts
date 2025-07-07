@@ -52,6 +52,7 @@ export class QueueProcessor extends WorkerHost {
         );
         break;
       default:
+        console.log(`Job ${name} not found`);
         throw new Error(`Unknown job name: ${name}`);
     }
   }
@@ -107,8 +108,6 @@ export class QueueProcessor extends WorkerHost {
   ): Promise<void> {
     for (let i = 0; i < batches.length; i += this.CONCURRENT_BATCHES) {
       const batchChunk = batches.slice(i, i + this.CONCURRENT_BATCHES);
-      console.log(`Processing ${batchChunk.length} batches concurrently`);
-
       await Promise.all(batchChunk.map(processor));
 
       if (i + this.CONCURRENT_BATCHES < batches.length) {
