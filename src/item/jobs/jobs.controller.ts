@@ -16,6 +16,7 @@ export class JobsController {
 
   @Get(':id')
   async getJobStatus(@Param('id') jobId: string): Promise<JobStatusResponse> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const job = await this.updateQueue.getJob(jobId);
 
     if (!job) {
@@ -36,6 +37,7 @@ export class JobsController {
       id: job.id ?? '',
       status,
       progress: typeof job.progress === 'number' ? job.progress : 0,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
       processedCount: job.returnvalue?.processedCount,
       failedReason: job.failedReason ?? undefined,
     };
