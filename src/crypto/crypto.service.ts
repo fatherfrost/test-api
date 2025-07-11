@@ -29,11 +29,27 @@ type ShortSubmitData = {
   state: number;
 };
 
+type WithdrawalSubmitData = {
+  coin: string;
+  network: string;
+  amount: number;
+  address: string;
+  timestamp: number;
+  signature: string;
+};
+
 type CreateOrderArgs = {
   symbol: string;
   quantity: number;
   price: number;
   side: 'BUY' | 'SELL';
+};
+
+type CreateWithdrawalArgs = {
+  coin: string;
+  network: string;
+  amount: number;
+  address: string;
 };
 
 type CreateShortArgs = {
@@ -50,40 +66,6 @@ export class CryptoService {
   private trade_base_url = 'https://api.mexc.com';
   private readonly BASE_URL = 'https://contract.mexc.com';
 
-  async createOrder({
-    symbol,
-    quantity,
-    price,
-    side,
-  }: CreateOrderArgs): Promise<OrderSubmitData> {
-    const requestOptions = {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      data: {
-        symbol: `${symbol}USDT`,
-        side,
-        type: 'LIMIT',
-        price,
-        quantity,
-        timeInForce: 'GTC',
-      },
-    };
-
-    try {
-      const response = await axios(
-        `${this.trade_base_url}/api/v3/order`,
-        requestOptions,
-      );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return response.data;
-    } catch (error) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      throw new Error(`Failed to create order: ${error.message}`);
-    }
-  }
-
   private getSignature(params: Record<string, any>): string {
     const sorted = Object.keys(params)
       .sort()
@@ -95,13 +77,14 @@ export class CryptoService {
       .digest('hex');
   }
 
-  private async privatePost(
+  private async privateRequest<T>(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     endpoint: string,
-    body: Record<string, any>,
-  ): Promise<ShortSubmitData> {
+    data?: Record<string, any>,
+  ): Promise<T> {
     const timestamp = Date.now();
     const params = {
-      ...body,
+      ...data,
       apiKey: this.API_KEY,
       reqTime: timestamp,
     };
@@ -110,10 +93,67 @@ export class CryptoService {
     const url = `${this.BASE_URL}${endpoint}`;
     const headers = { 'Content-Type': 'application/json' };
 
-    const res: AxiosResponse<MexcApiResponse<OrderSubmitData>> =
-      await axios.post(url, params, { headers });
+    const response: AxiosResponse<MexcApiResponse<T>> = await axios({
+      url,
+      method,
+      headers,
+      data: method !== 'GET' ? params : undefined,
+      params: method === 'GET' ? params : undefined,
+    });
+    return response.data.data;
+  }
 
-    return res.data.data;
+  async createOrder({
+    symbol,
+    quantity,
+    price,
+    side,
+  }: CreateOrderArgs): Promise<OrderSubmitData> {
+    const data = {
+      symbol: `${symbol}USDT`,
+      side,
+      type: 'LIMIT',
+      price,
+      quantity,
+      timeInForce: 'GTC',
+    };
+
+    try {
+      return await this.privateRequest<OrderSubmitData>(
+        'POST',
+        '/api/v3/order',
+        data,
+      );
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      throw new Error(`Failed to create order: ${error.message}`);
+    }
+  }
+
+  async createWithdrawal({
+    coin,
+    address,
+    network,
+    amount,
+  }: CreateWithdrawalArgs): Promise<WithdrawalSubmitData> {
+    const data = {
+      coin,
+      network,
+      amount,
+      address,
+      timestamp: Date.now(),
+    };
+
+    try {
+      return await this.privateRequest<WithdrawalSubmitData>(
+        'POST',
+        '/api/v3/capital/withdraw',
+        data,
+      );
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      throw new Error(`Failed to create order: ${error.message}`);
+    }
   }
 
   async openShortLimitOrder({
@@ -123,20 +163,19 @@ export class CryptoService {
     volume,
   }: CreateShortArgs): Promise<ShortSubmitData> {
     // Крок 1. Встановлюємо плечe x1
-    await this.privatePost('/api/v1/position/change-leverage', {
+    await this.privateRequest('POST', '/api/v1/position/change-leverage', {
       symbol,
       leverage,
       positionType: 1, // cross margin
     });
 
     // Крок 2. Встановлюємо режим маржі = Cross (1)
-    await this.privatePost('/api/v1/position/change-margin-type', {
+    await this.privateRequest('POST', '/api/v1/position/change-margin-type', {
       symbol,
       marginType: 1, // 1 = cross
     });
 
-    // Крок 3. Відкриваємо шорт (SELL) ордер з type = limit
-    const result = await this.privatePost('/api/v1/order/submit', {
+    const data = {
       symbol,
       price,
       volume,
@@ -146,7 +185,13 @@ export class CryptoService {
       positionId: 0, // auto create
       leverage,
       externalOid: `short-${Date.now()}`,
-    });
+    };
+    // Крок 3. Відкриваємо шорт (SELL) ордер з type = limit
+    const result = await this.privateRequest<ShortSubmitData>(
+      'POST',
+      '/api/v1/order/submit',
+      data,
+    );
 
     console.log('Short order result:');
     console.log(result);

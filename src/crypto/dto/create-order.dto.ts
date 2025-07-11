@@ -1,6 +1,15 @@
+import { IsIn, IsNumber, IsString } from 'class-validator';
+
 export class CreateOrderDto {
+  @IsString()
   symbol: string;
-  price: number;
+
+  @IsNumber()
   quantity: number;
+
+  @IsNumber()
+  price: number;
+
+  @IsIn(['BUY', 'SELL'])
   side: 'BUY' | 'SELL';
 }
