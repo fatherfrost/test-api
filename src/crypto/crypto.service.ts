@@ -1,63 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import axios, { AxiosResponse } from 'axios';
-
-type MexcApiResponse<T> = {
-  success: boolean;
-  code: number;
-  message: string;
-  data: T;
-};
-
-type OrderSubmitData = {
-  orderId: string;
-  symbol: string;
-  price: number;
-  vol: number;
-  leverage: number;
-  side: number;
-  state: number;
-};
-
-type ShortSubmitData = {
-  orderId: string;
-  symbol: string;
-  price: number;
-  vol: number;
-  leverage: number;
-  side: number;
-  state: number;
-};
-
-type WithdrawalSubmitData = {
-  coin: string;
-  network: string;
-  amount: number;
-  address: string;
-  timestamp: number;
-  signature: string;
-};
-
-type CreateOrderArgs = {
-  symbol: string;
-  quantity: number;
-  price: number;
-  side: 'BUY' | 'SELL';
-};
-
-type CreateWithdrawalArgs = {
-  coin: string;
-  network: string;
-  amount: number;
-  address: string;
-};
-
-type CreateShortArgs = {
-  symbol: string;
-  price: number;
-  leverage: number;
-  volume: number;
-};
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  SendOptions,
+} from '@solana/web3.js';
+import DLMM, { StrategyType } from '@meteora-ag/dlmm';
+import {
+  AddLiquidityParams,
+  CreateOrderArgs,
+  CreateShortArgs,
+  CreateWithdrawalArgs,
+  MexcApiResponse,
+  OrderSubmitData,
+  RemoveLiquidityParams,
+  ShortSubmitData,
+  TxOrTxs,
+  WithdrawalSubmitData,
+} from './types/meteora.types';
 
 @Injectable()
 export class CryptoService {
@@ -65,6 +28,13 @@ export class CryptoService {
   private readonly SECRET_KEY = 'some_secret';
   private trade_base_url = 'https://api.mexc.com';
   private readonly BASE_URL = 'https://contract.mexc.com';
+
+  private connection = new Connection('https://api.mainnet-beta.solana.com');
+  private dlmm: DLMM;
+
+  async init(poolAddress: string) {
+    this.dlmm = await DLMM.create(this.connection, new PublicKey(poolAddress));
+  }
 
   private getSignature(params: Record<string, any>): string {
     const sorted = Object.keys(params)
@@ -196,5 +166,48 @@ export class CryptoService {
     console.log('Short order result:');
     console.log(result);
     return result;
+  }
+
+  async addLiquidity(args: AddLiquidityParams): Promise<string> {
+    const { userPubkey, positionPubkey, totalXAmount, totalYAmount, strategy } =
+      args;
+    const tx: Transaction =
+      await this.dlmm.initializePositionAndAddLiquidityByStrategy({
+        user: userPubkey,
+        positionPubKey: positionPubkey,
+        totalXAmount,
+        totalYAmount,
+        strategy: { ...strategy, strategyType: StrategyType.Spot },
+      });
+    return await this.connection.sendTransaction(tx, [
+      Keypair.fromSecretKey(userPubkey.toBuffer()),
+    ]);
+  }
+
+  async removeLiquidity(args: RemoveLiquidityParams): Promise<string[]> {
+    const tx: TxOrTxs = await this.dlmm.removeLiquidity({
+      position: args.position,
+      user: args.userPubkey,
+      fromBinId: args.fromBinId,
+      toBinId: args.toBinId,
+      bps: args.liquiditiesBpsToRemove,
+      shouldClaimAndClose: args.shouldClaimAndClose,
+    });
+    return await this.sendTxs(tx, [
+      Keypair.fromSecretKey(args.userPubkey.toBuffer()),
+    ]);
+  }
+
+  private async sendTxs(
+    txsOrTx: TxOrTxs,
+    signers: Keypair[],
+  ): Promise<string[]> {
+    const txs = Array.isArray(txsOrTx) ? txsOrTx : [txsOrTx];
+    const sigs: string[] = [];
+    const opts: SendOptions = { skipPreflight: false };
+    for (const tx of txs) {
+      sigs.push(await this.connection.sendTransaction(tx, signers, opts));
+    }
+    return sigs;
   }
 }
